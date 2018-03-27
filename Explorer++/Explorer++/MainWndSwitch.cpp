@@ -35,10 +35,6 @@ and the right edge of the treeview during
 a resizing operation. */
 static const int TREEVIEW_DRAG_OFFSET = 8;
 
-/* TODO: Remove once custom menu image lists
-have been corrected. */
-extern HIMAGELIST himlMenu;
-
 LRESULT CALLBACK WndProcStub(HWND hwnd,UINT Msg,WPARAM wParam,LPARAM lParam)
 {
 	Explorerplusplus *pContainer = (Explorerplusplus *)GetWindowLongPtr(hwnd,GWLP_USERDATA);
@@ -88,20 +84,11 @@ LRESULT CALLBACK Explorerplusplus::WindowProcedure(HWND hwnd,UINT Msg,WPARAM wPa
 		break;
 
 	case WM_INITMENU:
-		m_pCustomMenu->OnInitMenu(wParam);
 		SetProgramMenuItemStates((HMENU)wParam);
 		break;
 
 	case WM_MENUSELECT:
 		StatusBarMenuSelect(wParam,lParam);
-		break;
-
-	case WM_MEASUREITEM:
-		return OnMeasureItem(reinterpret_cast<MEASUREITEMSTRUCT *>(lParam));
-		break;
-
-	case WM_DRAWITEM:
-		return OnDrawItem(reinterpret_cast<DRAWITEMSTRUCT *>(lParam));
 		break;
 
 	case WM_DEVICECHANGE:
@@ -117,7 +104,7 @@ LRESULT CALLBACK Explorerplusplus::WindowProcedure(HWND hwnd,UINT Msg,WPARAM wPa
 		occurs after the specified tab index has been
 		freed (in which case nothing happens), or before. */
 		if(CheckTabIdStatus((int)wParam))
-			m_pShellBrowser[wParam]->DirectoryAltered();
+			m_pShellBrowser[static_cast<int>(wParam)]->DirectoryAltered();
 		break;
 
 	case WM_USER_TREEVIEW_GAINEDFOCUS:
@@ -139,18 +126,18 @@ LRESULT CALLBACK Explorerplusplus::WindowProcedure(HWND hwnd,UINT Msg,WPARAM wPa
 	case WM_USER_FOLDEREMPTY:
 		{
 			if((BOOL)lParam == TRUE)
-				NListView::ListView_SetBackgroundImage(m_hListView[(int)wParam],IDB_FOLDEREMPTY);
+				NListView::ListView_SetBackgroundImage(m_hListView.at((int)wParam),IDB_FOLDEREMPTY);
 			else
-				NListView::ListView_SetBackgroundImage(m_hListView[(int)wParam],NULL);
+				NListView::ListView_SetBackgroundImage(m_hListView.at((int)wParam),NULL);
 		}
 		break;
 
 	case WM_USER_FILTERINGAPPLIED:
 		{
 			if((BOOL)lParam == TRUE)
-				NListView::ListView_SetBackgroundImage(m_hListView[(int)wParam],IDB_FILTERINGAPPLIED);
+				NListView::ListView_SetBackgroundImage(m_hListView.at((int)wParam),IDB_FILTERINGAPPLIED);
 			else
-				NListView::ListView_SetBackgroundImage(m_hListView[(int)wParam],NULL);
+				NListView::ListView_SetBackgroundImage(m_hListView.at((int)wParam),NULL);
 		}
 		break;
 
@@ -198,7 +185,7 @@ LRESULT CALLBACK Explorerplusplus::WindowProcedure(HWND hwnd,UINT Msg,WPARAM wPa
 			{
 				if(itr->uId == pDWFolderSizeCompletion->uId)
 				{
-					if(itr->iTabId == m_iObjectIndex)
+					if(itr->iTabId == m_selectedTabId)
 					{
 						bValid = itr->bValid;
 					}
@@ -344,7 +331,7 @@ LRESULT CALLBACK Explorerplusplus::CommandHandler(HWND hwnd,WPARAM wParam)
 		{
 			m_pActiveShellBrowser->ImportColumns(&m_pActiveColumnList);
 
-			RefreshTab(m_iObjectIndex);
+			RefreshTab(m_selectedTabId);
 		}
 		else
 		{
@@ -560,35 +547,35 @@ LRESULT CALLBACK Explorerplusplus::CommandHandler(HWND hwnd,WPARAM wParam)
 			break;
 
 		case IDM_VIEW_EXTRALARGEICONS:
-			m_pShellBrowser[m_iObjectIndex]->SetCurrentViewMode(VM_EXTRALARGEICONS);
+			m_pActiveShellBrowser->SetCurrentViewMode(VM_EXTRALARGEICONS);
 			break;
 
 		case IDM_VIEW_LARGEICONS:
-			m_pShellBrowser[m_iObjectIndex]->SetCurrentViewMode(VM_LARGEICONS);
+			m_pActiveShellBrowser->SetCurrentViewMode(VM_LARGEICONS);
 			break;
 
 		case IDM_VIEW_ICONS:
-			m_pShellBrowser[m_iObjectIndex]->SetCurrentViewMode(VM_ICONS);
+			m_pActiveShellBrowser->SetCurrentViewMode(VM_ICONS);
 			break;
 
 		case IDM_VIEW_SMALLICONS:
-			m_pShellBrowser[m_iObjectIndex]->SetCurrentViewMode(VM_SMALLICONS);
+			m_pActiveShellBrowser->SetCurrentViewMode(VM_SMALLICONS);
 			break;
 
 		case IDM_VIEW_LIST:
-			m_pShellBrowser[m_iObjectIndex]->SetCurrentViewMode(VM_LIST);
+			m_pActiveShellBrowser->SetCurrentViewMode(VM_LIST);
 			break;
 
 		case IDM_VIEW_DETAILS:
-			m_pShellBrowser[m_iObjectIndex]->SetCurrentViewMode(VM_DETAILS);
+			m_pActiveShellBrowser->SetCurrentViewMode(VM_DETAILS);
 			break;
 
 		case IDM_VIEW_THUMBNAILS:
-			m_pShellBrowser[m_iObjectIndex]->SetCurrentViewMode(VM_THUMBNAILS);
+			m_pActiveShellBrowser->SetCurrentViewMode(VM_THUMBNAILS);
 			break;
 
 		case IDM_VIEW_TILES:
-			m_pShellBrowser[m_iObjectIndex]->SetCurrentViewMode(VM_TILES);
+			m_pActiveShellBrowser->SetCurrentViewMode(VM_TILES);
 			break;
 
 		case IDM_VIEW_CHANGEDISPLAYCOLOURS:
@@ -1364,7 +1351,7 @@ LRESULT CALLBACK Explorerplusplus::CommandHandler(HWND hwnd,WPARAM wParam)
 			break;
 
 		case IDA_TAB_DUPLICATETAB:
-			OnDuplicateTab(m_iTabSelectedItem);
+			OnDuplicateTab(m_selectedTabIndex);
 			break;
 
 		case IDA_HOME:
@@ -1372,39 +1359,39 @@ LRESULT CALLBACK Explorerplusplus::CommandHandler(HWND hwnd,WPARAM wParam)
 			break;
 
 		case IDA_TAB1:
-			OnSelectTab(0);
+			OnSelectTabByIndex(0);
 			break;
 
 		case IDA_TAB2:
-			OnSelectTab(1);
+			OnSelectTabByIndex(1);
 			break;
 
 		case IDA_TAB3:
-			OnSelectTab(2);
+			OnSelectTabByIndex(2);
 			break;
 
 		case IDA_TAB4:
-			OnSelectTab(3);
+			OnSelectTabByIndex(3);
 			break;
 
 		case IDA_TAB5:
-			OnSelectTab(4);
+			OnSelectTabByIndex(4);
 			break;
 
 		case IDA_TAB6:
-			OnSelectTab(5);
+			OnSelectTabByIndex(5);
 			break;
 
 		case IDA_TAB7:
-			OnSelectTab(6);
+			OnSelectTabByIndex(6);
 			break;
 
 		case IDA_TAB8:
-			OnSelectTab(7);
+			OnSelectTabByIndex(7);
 			break;
 
 		case IDA_LASTTAB:
-			OnSelectTab(-1);
+			OnSelectTabByIndex(-1);
 			break;
 
 		case TOOLBAR_VIEWS:
@@ -1493,7 +1480,7 @@ LRESULT CALLBACK Explorerplusplus::NotifyHandler(LPARAM lParam)
 
 		case LVN_ITEMCHANGING:
 			{
-				UINT uViewMode = m_pShellBrowser[m_iObjectIndex]->GetCurrentViewMode();
+				UINT uViewMode = m_pActiveShellBrowser->GetCurrentViewMode();
 
 				if(uViewMode == VM_LIST)
 				{
@@ -1520,27 +1507,6 @@ LRESULT CALLBACK Explorerplusplus::NotifyHandler(LPARAM lParam)
 
 		case LVN_ENDLABELEDIT:
 			return OnListViewEndLabelEdit(lParam);
-			break;
-
-		case LVN_ENDSCROLL:
-			{
-				/* There's a bug within Windows XP that causes gridlines
-				within a listview to draw incorrectly. See references to
-				KB813791. */
-				if(m_dwMajorVersion == WINDOWS_XP_MAJORVERSION)
-				{
-					UINT uViewMode = m_pShellBrowser[m_iObjectIndex]->GetCurrentViewMode();
-
-					DWORD dwExtendedStyle = ListView_GetExtendedListViewStyle(m_hActiveListView);
-
-					if((uViewMode == VM_DETAILS) &&
-						(dwExtendedStyle & LVS_EX_GRIDLINES))
-					{
-						InvalidateRect(m_hActiveListView,NULL,TRUE);
-						UpdateWindow(m_hActiveListView);
-					}
-				}
-			}
 			break;
 
 		case LVN_GETDISPINFO:
@@ -1609,7 +1575,6 @@ LRESULT CALLBACK Explorerplusplus::NotifyHandler(LPARAM lParam)
 				NMREBARCHEVRON *pnmrc = NULL;
 				HWND hToolbar = NULL;
 				HMENU hMenu;
-				HIMAGELIST himlBackup;
 				HIMAGELIST himlSmall;
 				MENUITEMINFO mii;
 				TCHAR szText[512];
@@ -1627,7 +1592,7 @@ LRESULT CALLBACK Explorerplusplus::NotifyHandler(LPARAM lParam)
 
 				pnmrc = (NMREBARCHEVRON *)lParam;
 
-				himlBackup = himlMenu;
+				HIMAGELIST himlMenu = nullptr;
 
 				Shell_GetImageLists(NULL,&himlSmall);
 
@@ -1737,8 +1702,6 @@ LRESULT CALLBACK Explorerplusplus::NotifyHandler(LPARAM lParam)
 													}
 												}
 
-												SetMenuOwnerDraw(hSubMenu);
-
 												fMask |= MIIM_SUBMENU;
 											}
 											break;
@@ -1760,8 +1723,8 @@ LRESULT CALLBACK Explorerplusplus::NotifyHandler(LPARAM lParam)
 								mii.dwTypeData	= szText;
 								InsertMenuItem(hMenu,iMenu,TRUE,&mii);
 
-								SetMenuItemOwnerDrawn(hMenu,iMenu);
-								SetMenuItemBitmap(hMenu,tbButton.idCommand,tbButton.iBitmap);	
+								/* TODO: Update the image
+								for this menu item. */
 							}
 							iMenu++;
 						}
@@ -1816,8 +1779,6 @@ LRESULT CALLBACK Explorerplusplus::NotifyHandler(LPARAM lParam)
 				}
 
 				DestroyMenu(hMenu);
-
-				himlMenu = himlBackup;
 			}
 			break;
 	}

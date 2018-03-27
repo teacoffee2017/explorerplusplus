@@ -146,7 +146,7 @@ void Explorerplusplus::CreateBookmarksToolbar(void)
 		TBSTYLE_EX_MIXEDBUTTONS|TBSTYLE_EX_DRAWDDARROWS|
 		TBSTYLE_EX_DOUBLEBUFFER|TBSTYLE_EX_HIDECLIPPEDBUTTONS);
 
-	m_pBookmarksToolbar = new CBookmarksToolbar(m_hBookmarksToolbar,
+	m_pBookmarksToolbar = new CBookmarksToolbar(m_hBookmarksToolbar, this,
 		*m_bfAllBookmarks,m_guidBookmarksToolbar,TOOLBAR_BOOKMARK_START,TOOLBAR_BOOKMARK_END);
 }
 
@@ -281,17 +281,7 @@ void Explorerplusplus::OnApplicationToolbarRClick()
 	/* Add the item to the menu. */
 	InsertMenuItem(m_hToolbarRightClickMenu,7,TRUE,&mii);
 
-	/* Set it to be owner drawn. */
-	SetMenuItemOwnerDrawn(m_hToolbarRightClickMenu,7);
-
 	OnMainToolbarRClick();
-
-	mii.cbSize	= sizeof(mii);
-	mii.fMask	= MIIM_DATA;
-	GetMenuItemInfo(m_hToolbarRightClickMenu,7,TRUE,&mii);
-
-	/* Free the owner drawn data. */
-	free((void *)mii.dwItemData);
 
 	/* Now, remove the item from the menu. */
 	DeleteMenu(m_hToolbarRightClickMenu,7,MF_BYPOSITION);
@@ -472,8 +462,6 @@ HMENU Explorerplusplus::CreateRebarHistoryMenu(BOOL bBack)
 		}
 
 		history.clear();
-
-		SetMenuOwnerDraw(hSubMenu);
 	}
 
 	return hSubMenu;

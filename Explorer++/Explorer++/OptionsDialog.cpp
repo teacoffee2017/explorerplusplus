@@ -221,19 +221,6 @@ INT_PTR CALLBACK Explorerplusplus::GeneralSettingsProc(HWND hDlg,UINT uMsg,WPARA
 				}
 				CheckDlgButton(hDlg,nIDButton,BST_CHECKED);
 
-				/* If we're running on Windows XP, stop the user
-				from selecting the 'Replace Explorer for all
-				folders' option. */
-				if(m_dwMajorVersion == WINDOWS_XP_MAJORVERSION)
-				{
-					EnableWindow(GetDlgItem(hDlg,IDC_OPTION_REPLACEEXPLORER_ALL),FALSE);
-
-					if(m_ReplaceExplorerMode == NDefaultFileManager::REPLACEEXPLORER_ALL)
-					{
-						m_ReplaceExplorerMode = NDefaultFileManager::REPLACEEXPLORER_NONE;
-					}
-				}
-
 				switch(m_ReplaceExplorerMode)
 				{
 				case NDefaultFileManager::REPLACEEXPLORER_NONE:
@@ -708,7 +695,7 @@ INT_PTR CALLBACK Explorerplusplus::FilesFoldersProc(HWND hDlg,UINT uMsg,WPARAM w
 
 							RefreshTab((int)tcItem.lParam);
 
-							NListView::ListView_ActivateOneClickSelect(m_hListView[(int)tcItem.lParam],m_bOneClickActivate,m_OneClickActivateHoverTime);
+							NListView::ListView_ActivateOneClickSelect(m_hListView.at((int)tcItem.lParam),m_bOneClickActivate,m_OneClickActivateHoverTime);
 						}
 
 						SaveAllSettings();
@@ -871,7 +858,7 @@ INT_PTR CALLBACK Explorerplusplus::WindowProc(HWND hDlg,UINT uMsg,WPARAM wParam,
 							tcItem.mask	= TCIF_PARAM;
 							TabCtrl_GetItem(m_hTabCtrl,i,&tcItem);
 
-							dwExtendedStyle = ListView_GetExtendedListViewStyle(m_hListView[(int)tcItem.lParam]);
+							dwExtendedStyle = ListView_GetExtendedListViewStyle(m_hListView.at((int)tcItem.lParam));
 
 							if(bCheckBoxSelection)
 							{
@@ -882,7 +869,7 @@ INT_PTR CALLBACK Explorerplusplus::WindowProc(HWND hDlg,UINT uMsg,WPARAM wParam,
 								dwExtendedStyle &= ~LVS_EX_CHECKBOXES;
 							}
 
-							ListView_SetExtendedListViewStyle(m_hListView[(int)tcItem.lParam],
+							ListView_SetExtendedListViewStyle(m_hListView.at((int)tcItem.lParam),
 								dwExtendedStyle);
 						}
 
@@ -942,7 +929,7 @@ INT_PTR CALLBACK Explorerplusplus::WindowProc(HWND hDlg,UINT uMsg,WPARAM wParam,
 							m_pShellBrowser[(int)tcItem.lParam]->ToggleGridlines();
 						}
 
-						NListView::ListView_AddRemoveExtendedStyle(m_hListView[(int)tcItem.lParam],
+						NListView::ListView_AddRemoveExtendedStyle(m_hListView.at((int)tcItem.lParam),
 							LVS_EX_FULLROWSELECT,m_bUseFullRowSelect);
 					}
 
@@ -986,8 +973,7 @@ INT_PTR CALLBACK Explorerplusplus::TabSettingsProc(HWND hDlg,UINT uMsg,WPARAM wP
 	{
 		case WM_INITDIALOG:
 			{
-				if(!(m_dwMajorVersion == WINDOWS_VISTA_SEVEN_MAJORVERSION &&
-					m_dwMinorVersion >= 1))
+				if(!IsWindows7OrGreater())
 				{
 					EnableWindow(GetDlgItem(hDlg,IDC_TABS_TASKBARTHUMBNAILS),FALSE);
 
@@ -1118,7 +1104,7 @@ INT_PTR CALLBACK Explorerplusplus::DefaultSettingsProc(HWND hDlg,UINT uMsg,WPARA
 
 				for each(auto ViewMode in m_ViewModes)
 				{
-					int StringID = GetViewModeMenuStringId(ViewMode.uViewMode);
+					int StringID = GetViewModeMenuStringId(ViewMode);
 
 					TCHAR szTemp[64];
 					LoadString(m_hLanguageModule,StringID,szTemp,SIZEOF_ARRAY(szTemp));
@@ -1127,10 +1113,10 @@ INT_PTR CALLBACK Explorerplusplus::DefaultSettingsProc(HWND hDlg,UINT uMsg,WPARA
 
 					if(Index != CB_ERR)
 					{
-						SendMessage(hComboBox,CB_SETITEMDATA,Index,ViewMode.uViewMode);
+						SendMessage(hComboBox,CB_SETITEMDATA,Index,ViewMode);
 					}
 
-					if(ViewMode.uViewMode == m_ViewModeGlobal)
+					if(ViewMode == m_ViewModeGlobal)
 					{
 						SelectedIndex = Index;
 					}

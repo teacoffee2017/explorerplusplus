@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../Helper/Bookmark.h"
+#include <boost/optional.hpp>
 
 class CBookmarksToolbarDropHandler : public IDropTarget
 {
@@ -45,7 +46,7 @@ class CBookmarksToolbar : public NBookmark::IBookmarkItemNotification
 
 public:
 
-	CBookmarksToolbar(HWND hToolbar,CBookmarkFolder &AllBookmarks,const GUID &guidBookmarksToolbar,UINT uIDStart,UINT uIDEnd);
+	CBookmarksToolbar(HWND hToolbar, IExplorerplusplus *pexpp, CBookmarkFolder &AllBookmarks, const GUID &guidBookmarksToolbar, UINT uIDStart, UINT uIDEnd);
 	~CBookmarksToolbar();
 
 	/* IBookmarkItemNotification methods. */
@@ -79,10 +80,17 @@ private:
 
 	void	RemoveBookmarkItem(const GUID &guid);
 
+	bool	OnCommand(WPARAM wParam, LPARAM lParam);
+	bool	OnGetInfoTip(NMTBGETINFOTIP *infoTip);
+
 	int		GetBookmarkItemIndex(const GUID &guid);
+
+	boost::optional<NBookmarkHelper::variantBookmark_t>	GetBookmarkItemFromToolbarIndex(int index);
 
 	HWND							m_hToolbar;
 	HIMAGELIST						m_himl;
+
+	IExplorerplusplus				*m_pexpp;
 
 	CBookmarkFolder					&m_AllBookmarks;
 	GUID							m_guidBookmarksToolbar;

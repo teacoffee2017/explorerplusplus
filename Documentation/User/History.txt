@@ -6,20 +6,37 @@ Current version: 1.3.5
 Version 1.4.0
 -------------
 New features:
+- Support for the "Date Deleted" and "Original Location" recycle
+  bin columns has been implemented.
+- When renaming a file, it's possible to move to the next item by
+  pressing tab. Shift+tab can now be used to move to the previous
+  item.
 
 Bug fixes:
 - When right-clicking on the listview background in Windows 10,
   Explorer++ would crash. To resolve this, the OneDrive shell
   extension is now ignored when showing the menu. See #35.
+- Fixed an issue that caused taskbar thumbnails (shown on Windows 7
+  and above) to not always be displayed correctly. See #55.
 - When renaming a file, it's possible to press tab to put the next
   file into edit mode. On Windows 10, pressing tab would select the
   next file, but it would not go into edit mode. Fixed. See #50.
 - Previously, when creating a file via the new menu in Windows 10,
   the file would not be put into edit mode. Fixed. See #48.
+- The Explorer++ icon shown in the volume mixer was larger than it
+  should have been. Fixed. See #24.
+- Under certain conditions, switching to a tab using the taskbar
+  thumbnails would result in the wrong tab being selected. Fixed.
+- Under certain conditions, refreshing a tab via the tab right-click
+  menu would result in the wrong tab being refreshed. Fixed.
 - Fixed a number of memory leaks.
 
 Misc:
+- Windows XP is no longer supported. Windows Vista is now the minumum
+  supported version.
 - Builds are now digitally signed.
+- All menus are now drawn in the standard system style, rather than
+  a custom style.
 
 Version 1.3.5 (03/02/2013)
 --------------------------

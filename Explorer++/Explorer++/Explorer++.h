@@ -2,7 +2,6 @@
 
 #include <unordered_map>
 #include "Explorer++_internal.h"
-#include "BoostCheck.h"
 #include "BookmarkHelper.h"
 #include "BookmarksToolbar.h"
 #include "DrivesToolbar.h"
@@ -12,12 +11,10 @@
 #include "../ShellBrowser/iShellView.h"
 #include "../MyTreeView/MyTreeView.h"
 #include "../Helper/FileContextMenuManager.h"
-#include "../Helper/BaseDialog.h"
 #include "../Helper/SetDefaultFileManager.h"
 #include "../Helper/FileActionHandler.h"
 #include "../Helper/Bookmark.h"
-#include "../Helper/DropHandler.h"
-#include "../Helper/CustomMenu.h"
+#include "../Helper/ImageWrappers.h"
 #import <msxml3.dll> raw_interfaces_only
 
 #define MENU_BOOKMARK_STARTID		10000
@@ -34,10 +31,6 @@
 /* Private definitions. */
 #define FROM_LISTVIEW				0
 #define FROM_TREEVIEW				1
-
-/* Registry keys used to store program settings. */
-#define REG_MAIN_KEY				_T("Software\\Explorer++")
-#define REG_SETTINGS_KEY			_T("Software\\Explorer++\\Settings")
 
 class Explorerplusplus : public IExplorerplusplus, public IFileContextMenuExternal
 {
@@ -121,13 +114,6 @@ private:
 	{
 		INFOTIP_SYSTEM	= 0,
 		INFOTIP_CUSTOM	= 1
-	};
-
-	/* Describes the view modes and their order
-	(as they differ on Windows XP and Vista/7). */
-	struct ViewMode_t
-	{
-		UINT uViewMode;
 	};
 
 	struct ArrangeMenuItem_t
@@ -372,8 +358,6 @@ private:
 	void					OnLockTabAndAddress(int iTab);
 	void					UpdateTabToolbar(void);
 	void					OnAutoSizeColumns(void);
-	BOOL					OnMeasureItem(MEASUREITEMSTRUCT *pMeasureItem);
-	BOOL					OnDrawItem(DRAWITEMSTRUCT *pDrawItem);
 	void					OnToolbarViews(void);
 	void					ShowToolbarViewsDropdown(void);
 	void					OnApplicationToolbarRClick();
@@ -395,8 +379,11 @@ private:
 	LRESULT					OnCustomDraw(LPARAM lParam);
 	void					OnSortBy(UINT uSortMode);
 	void					OnGroupBy(UINT uSortMode);
-	void					OnSelectTab(int iTab);
-	void					OnSelectTab(int iTab,BOOL bSetFocus);
+	void					OnSelectTabById(int tabId, BOOL setFocus);
+	int						GetTabIndexById(int tabId);
+	int						GetTabIdByIndex(int index);
+	void					OnSelectTabByIndex(int iTab);
+	void					OnSelectTabByIndex(int iTab,BOOL bSetFocus);
 
 	/* Navigation. */
 	void					OnBrowseBack();
@@ -513,7 +500,7 @@ private:
 	void					RefreshAllTabs(void);
 	void					CloseOtherTabs(int iTab);
 	int						GetCurrentTabId() const;
-	std::wstring			GetTabName(int iTab) const;
+	std::wstring			GetTabName(int iTab);
 	void					SetTabName(int iTab, std::wstring strName, BOOL bUseCustomName);
 	void					SetTabSelection(int Index);
 	void					PushGlobalSettingsToTab(int iTabId);
@@ -630,8 +617,11 @@ private:
 	void					RegisterTab(HWND hTabProxy, const TCHAR *szDisplayName, BOOL bTabActive);
 	HBITMAP					CaptureTabScreenshot(int iTabId);
 	void					GetTabLivePreviewBitmap(int iTabId,TabPreviewInfo_t *ptpi);
-	void					RemoveTabProxy(int iInternalIndex);
+	void					RemoveTabProxy(int iTabId);
 	void					InvalidateTaskbarThumbnailBitmap(int iTabId);
+	void					UpdateTaskbarThumbnailsForTabSelectionChange(int selectedTabId);
+	void					UpdateTaskbarThumbnailTtitle(int tabId, const std::wstring &title);
+	void					SetTabProxyIcon(int iTabId, HICON hIcon);
 
 	/* Windows 7 jumplist tasks. */
 	void					SetupJumplistTasks();
@@ -667,7 +657,6 @@ private:
 	void					OpenFolderItem(LPCITEMIDLIST pidlItem,BOOL bOpenInNewTab,BOOL bOpenInNewWindow);
 	void					OpenFileItem(LPCITEMIDLIST pidlItem,const TCHAR *szParameters);
 	HRESULT					OnListViewCopy(BOOL bCopy);
-	HRESULT					ProcessShellMenuCommand(IContextMenu *pContextMenu,UINT CmdIDOffset,UINT iStartOffset);
 	HRESULT					ShowMultipleFileProperties(LPITEMIDLIST pidlDirectory,LPCITEMIDLIST *ppidl,int nFiles) const;
 
 	/* File context menu. */
@@ -688,14 +677,11 @@ private:
 	BOOL					CanPaste(void) const;
 	BOOL					TestItemAttributes(SFGAOF attributes) const;
 
-	/* Tab proxy's. */
-	void					SetTabProxyIcon(int iTabId,HICON hIcon);
-
 	/* Display window file information. */
 	void					UpdateDisplayWindow(void);
-	void					UpdateDisplayWindowZero(void);
-	void					UpdateDisplayWindowOne(void);
-	void					UpdateDisplayWindowMore(void);
+	void					UpdateDisplayWindowForZeroFiles(void);
+	void					UpdateDisplayWindowForOneFile(void);
+	void					UpdateDisplayWindowForMultipleFiles(void);
 
 	/* Columns. */
 	void					OnSelectColumns();
@@ -754,14 +740,13 @@ private:
 	HWND					GetActiveListView() const;
 	CShellBrowser			*GetActiveShellBrowser() const;
 
-	/* Custom menus. */
-	void					SetMenuOwnerDraw(HMENU hMenu);
-	void					SetMenuOwnerDrawInternal(HMENU hMenu, int nMenus);
-	void					SetMenuItemOwnerDrawn(HMENU hMenu, int iItem);
-	void					SetMenuItemBitmap(HMENU hMenu, UINT ItemID, int iBitmap);
-
 	/* Helpers. */
 	HANDLE					CreateWorkerThread();
+
+	/* Menus. */
+	void					InitializeMenus(void);
+	void					SetMenuImages();
+	void					SetMenuItemImageFromImageList(HMENU menu, UINT menuItemId, HIMAGELIST imageList, int bitmapIndex, std::vector<HBitmapPtr> &menuImages);
 
 	/* Miscellaneous. */
 	BOOL					CompareVirtualFolders(UINT uFolderCSIDL);
@@ -769,7 +754,6 @@ private:
 	void					CreateViewsMenu(POINT *ptOrigin);
 	void					CreateStatusBar(void);
 	void					InitializeDisplayWindow(void);
-	void					InitializeMenus(void);
 	void					SetGoMenuName(HMENU hMenu,UINT uMenuID,UINT csidl);
 	int						CreateDriveFreeSpaceString(const TCHAR *szPath, TCHAR *szBuffer, int nBuffer);
 	BOOL					AnyItemsSelected(void);
@@ -799,16 +783,12 @@ private:
 	HWND					m_hHolder;
 	HWND					m_hAddressBar;
 	HWND					m_hMainToolbar;
-	HWND					m_hListView[MAX_TABS];
 	HWND					m_hFoldersToolbar;
 	HWND					m_hTabBacking;
 	HWND					m_hBookmarksToolbar;
 
-	CShellBrowser *			m_pShellBrowser[MAX_TABS];
-	CShellBrowser *			m_pActiveShellBrowser;
 	IDirectoryMonitor *		m_pDirMon;
 	CMyTreeView *			m_pMyTreeView;
-	CCustomMenu *			m_pCustomMenu;
 	CStatusBar *			m_pStatusBar;
 	HANDLE					m_hIconThread;
 	HANDLE					m_hTreeViewIconThread;
@@ -817,10 +797,8 @@ private:
 	HMODULE					m_hLanguageModule;
 
 	/** Internal state. **/
-	HWND					m_hActiveListView;
 	HWND					m_hLastActiveWindow;
 	HWND					m_hNextClipboardViewer;
-	LPITEMIDLIST			m_pidlDirectory;
 	HMENU					m_hArrangeSubMenu;
 	HMENU					m_hGroupBySubMenu;
 	HMENU					m_hArrangeSubMenuRClick;
@@ -833,8 +811,6 @@ private:
 	TCHAR					m_DefaultTabDirectory[MAX_PATH];
 	TCHAR					m_OldTreeViewFileName[MAX_PATH];
 	DWORD					m_Language;
-	DWORD					m_dwMajorVersion;
-	DWORD					m_dwMinorVersion;
 	LONG					m_DisplayWindowHeight;
 	BOOL					m_bTreeViewRightClick;
 	BOOL					m_bSelectingTreeViewDirectory;
@@ -842,13 +818,14 @@ private:
 	BOOL					m_bLanguageLoaded;
 	BOOL					m_bTreeViewOpenInNewTab;
 	unsigned int			m_TreeViewWidth;
-	int						m_iObjectIndex;
+	int						m_selectedTabIndex;
+	int						m_selectedTabId;
 	int						m_iMaxArrangeMenuItem;
 	int						m_iLastSelectedTab;
-	int						m_iTabSelectedItem;
 	ULONG					m_SHChangeNotifyID;
+	bool					m_InitializationFinished;
 
-	std::list<ViewMode_t>	m_ViewModes;
+	std::list<UINT>			m_ViewModes;
 
 	/* Initialization. */
 	BOOL					m_bLoadSettingsFromXML;
@@ -857,9 +834,14 @@ private:
 	COLORREF				m_DisplayWindowTextColor;
 	HFONT					m_DisplayWindowFont;
 
-	/* Internal tab state. */
-	TabInfo_t				m_TabInfo[MAX_TABS];
+	/* Tabs. */
+	std::unordered_map<int, TabInfo_t> m_TabInfo;
 	UINT					m_uTabMap[MAX_TABS];
+	std::unordered_map<int, HWND>	m_hListView;
+	std::unordered_map<int, CShellBrowser *> m_pShellBrowser;
+
+	HWND					m_hActiveListView;
+	CShellBrowser *			m_pActiveShellBrowser;
 
 	/* Directory-specific settings. */
 	std::list<DirectorySettings_t>	m_DirectorySettingsList;
@@ -936,6 +918,7 @@ private:
 	/* Tabs. */
 	CTabContainer			*m_pTabContainer;
 	HFONT					m_hTabFont;
+	HIMAGELIST				m_hTabCtrlImageList;
 
 	/* Bookmarks. */
 	CBookmarkFolder *		m_bfAllBookmarks;
@@ -1010,6 +993,9 @@ private:
 	/* Cut items data. */
 	std::list<std::wstring>	m_CutFileNameList;
 	int						m_iCutTabInternal;
+
+	/* Menu images. */
+	std::vector<HBitmapPtr>	m_menuImages;
 
 	/* Arrange menu related data. */
 	std::list<ArrangeMenuItem_t>	m_ArrangeList;

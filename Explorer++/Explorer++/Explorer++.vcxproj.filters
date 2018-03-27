@@ -55,15 +55,6 @@
     <ClCompile Include="iServiceProvider.cpp">
       <Filter>Context Menu Support\New Menu</Filter>
     </ClCompile>
-    <ClCompile Include="iShellView2.cpp">
-      <Filter>Context Menu Support\New Menu</Filter>
-    </ClCompile>
-    <ClCompile Include="LoggingFrontend.cpp">
-      <Filter>Logging</Filter>
-    </ClCompile>
-    <ClCompile Include="LoggingImplicitLink.cpp">
-      <Filter>Logging</Filter>
-    </ClCompile>
     <ClCompile Include="DialogHelper.cpp">
       <Filter>Dialog Support</Filter>
     </ClCompile>
@@ -184,9 +175,6 @@
     <ClCompile Include="RegistrySettings.cpp">
       <Filter>Settings</Filter>
     </ClCompile>
-    <ClCompile Include="CustomMenu.cpp">
-      <Filter>Core</Filter>
-    </ClCompile>
     <ClCompile Include="Language.cpp">
       <Filter>Core</Filter>
     </ClCompile>
@@ -197,6 +185,18 @@
       <Filter>Core</Filter>
     </ClCompile>
     <ClCompile Include="MainMenuHandler.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="BookmarkListView.cpp">
+      <Filter>Bookmarks</Filter>
+    </ClCompile>
+    <ClCompile Include="BookmarkTreeView.cpp">
+      <Filter>Bookmarks</Filter>
+    </ClCompile>
+    <ClCompile Include="Logging.cpp">
+      <Filter>Logging</Filter>
+    </ClCompile>
+    <ClCompile Include="DisplayWindow.cpp">
       <Filter>Core</Filter>
     </ClCompile>
   </ItemGroup>
@@ -237,9 +237,6 @@
     <ClInclude Include="AboutDialog.h">
       <Filter>General Dialogs</Filter>
     </ClInclude>
-    <ClInclude Include="BoostCheck.h">
-      <Filter>Core</Filter>
-    </ClInclude>
     <ClInclude Include="DestroyFilesDialog.h">
       <Filter>General Dialogs</Filter>
     </ClInclude>
@@ -279,14 +276,8 @@
     <ClInclude Include="iServiceProvider.h">
       <Filter>Context Menu Support\New Menu</Filter>
     </ClInclude>
-    <ClInclude Include="iShellView2.h">
-      <Filter>Context Menu Support\New Menu</Filter>
-    </ClInclude>
     <ClInclude Include="IModelessDialogNotification.h">
       <Filter>Dialog Support</Filter>
-    </ClInclude>
-    <ClInclude Include="LoggingFrontend.h">
-      <Filter>Logging</Filter>
     </ClInclude>
     <ClInclude Include="MainImages.h">
       <Filter>Core</Filter>
@@ -357,6 +348,18 @@
     <ClInclude Include="ModelessDialogs.h">
       <Filter>Dialog Support</Filter>
     </ClInclude>
+    <ClInclude Include="BookmarkListView.h">
+      <Filter>Bookmarks</Filter>
+    </ClInclude>
+    <ClInclude Include="BookmarkTreeView.h">
+      <Filter>Bookmarks</Filter>
+    </ClInclude>
+    <ClInclude Include="..\targetver.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="Logging.h">
+      <Filter>Logging</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Explorer++.rc">
@@ -412,6 +415,7 @@
     <None Include="Version.h">
       <Filter>Core</Filter>
     </None>
+    <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Resource Files">

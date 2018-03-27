@@ -28,7 +28,6 @@ namespace
 	LRESULT CALLBACK MainWndProcStub(HWND hwnd,UINT uMsg,WPARAM wParam,LPARAM lParam,UINT_PTR uIdSubclass,DWORD_PTR dwRefData);
 	LRESULT CALLBACK TabProxyWndProcStub(HWND hwnd,UINT Msg,WPARAM wParam,LPARAM lParam);
 
-	typedef BOOL (WINAPI *ChangeWindowMessageFilterProc)(UINT message,DWORD dwFlag);
 	typedef HRESULT (STDAPICALLTYPE *DwmSetWindowAttributeProc)(HWND hwnd,DWORD dwAttribute,LPCVOID pvAttribute,DWORD cbAttribute);
 	typedef HRESULT (STDAPICALLTYPE *DwmSetIconicThumbnailProc)(HWND hwnd,HBITMAP hbmp,DWORD dwSITFlags);
 	typedef HRESULT (STDAPICALLTYPE *DwmSetIconicLivePreviewBitmapProc)(HWND hwnd,HBITMAP hbmp,POINT *pptClient,DWORD dwSITFlags);
@@ -42,20 +41,17 @@ namespace
 
 	/* These definitions are needed to target
 	Windows 7 specific features, while remaining
-	compliant with XP and Vista. They are copied
-	directly from the appropriate header file. */
+	compliant with Vista. They are copied directly
+	from the appropriate header file. */
 	static const UINT WM_DWMSENDICONICTHUMBNAIL = 0x0323;
 	static const UINT WM_DWMSENDICONICLIVEPREVIEWBITMAP = 0x0326;
-	static const UINT MSGFLT_ADD = 1;
 }
 
 void Explorerplusplus::InitializeTaskbarThumbnails()
 {
 	m_bTaskbarInitialised = FALSE;
 
-	if((m_dwMajorVersion == WINDOWS_VISTA_SEVEN_MAJORVERSION &&
-		m_dwMinorVersion == 0) ||
-		m_dwMajorVersion < WINDOWS_VISTA_SEVEN_MAJORVERSION)
+	if(!IsWindows7OrGreater())
 	{
 		return;
 	}
@@ -67,23 +63,9 @@ void Explorerplusplus::InitializeTaskbarThumbnails()
 
 	m_uTaskbarButtonCreatedMessage = RegisterWindowMessage(_T("TaskbarButtonCreated"));
 
-	HMODULE hUser32 = LoadLibrary(_T("user32.dll"));
-
-	if(hUser32 != NULL)
-	{
-		/* If directly targeting Windows 7, this can be switched
-		to static, rather than dynamic linking. */
-		ChangeWindowMessageFilterProc ChangeWindowMessageFilter = (ChangeWindowMessageFilterProc)GetProcAddress(hUser32,"ChangeWindowMessageFilter");
-
-		if(ChangeWindowMessageFilter != NULL)
-		{
-			ChangeWindowMessageFilter(m_uTaskbarButtonCreatedMessage,MSGFLT_ADD);
-			ChangeWindowMessageFilter(WM_DWMSENDICONICTHUMBNAIL,MSGFLT_ADD);
-			ChangeWindowMessageFilter(WM_DWMSENDICONICLIVEPREVIEWBITMAP,MSGFLT_ADD);
-		}
-
-		FreeLibrary(hUser32);
-	}
+	ChangeWindowMessageFilter(m_uTaskbarButtonCreatedMessage, MSGFLT_ADD);
+	ChangeWindowMessageFilter(WM_DWMSENDICONICTHUMBNAIL, MSGFLT_ADD);
+	ChangeWindowMessageFilter(WM_DWMSENDICONICLIVEPREVIEWBITMAP, MSGFLT_ADD);
 
 	/* Subclass the main window until the above message (TaskbarButtonCreated) is caught. */
 	SetWindowSubclass(m_hContainer,MainWndProcStub,0,reinterpret_cast<DWORD_PTR>(this));
@@ -123,7 +105,7 @@ LRESULT CALLBACK Explorerplusplus::MainWndTaskbarThumbnailProc(HWND hwnd,UINT uM
 		/* Register each of the tabs. */
 		for(auto itr = m_TabProxyList.begin();itr != m_TabProxyList.end();itr++)
 		{
-			BOOL bActive = (itr->iTabId == m_iObjectIndex);
+			BOOL bActive = (itr->iTabId == m_selectedTabId);
 
 			RegisterTab(itr->hProxy,EMPTY_STRING,bActive);
 			UpdateTabText(itr->iTabId);
@@ -197,9 +179,7 @@ void Explorerplusplus::CreateTabProxy(int iTabId,BOOL bSwitchToNewTab)
 
 	/* If we're not running on Windows 7 or later, return without
 	doing anything. */
-	if((m_dwMajorVersion == WINDOWS_VISTA_SEVEN_MAJORVERSION &&
-		m_dwMinorVersion == 0) ||
-		m_dwMajorVersion < WINDOWS_VISTA_SEVEN_MAJORVERSION)
+	if(!IsWindows7OrGreater())
 	{
 		return;
 	}
@@ -264,13 +244,13 @@ void Explorerplusplus::CreateTabProxy(int iTabId,BOOL bSwitchToNewTab)
 	}
 }
 
-void Explorerplusplus::RemoveTabProxy(int iInternalIndex)
+void Explorerplusplus::RemoveTabProxy(int iTabId)
 {
 	if(m_bTaskbarInitialised)
 	{
 		for(auto itr = m_TabProxyList.begin();itr != m_TabProxyList.end();itr++)
 		{
-			if(itr->iTabId == iInternalIndex)
+			if(itr->iTabId == iTabId)
 			{
 				m_pTaskbarList->UnregisterTab(itr->hProxy);
 
@@ -365,12 +345,12 @@ LRESULT CALLBACK Explorerplusplus::TabProxyWndProc(HWND hwnd,UINT Msg,WPARAM wPa
 			ShowWindow(m_hContainer,SW_RESTORE);
 		}
 
-		OnSelectTab(iTabId,FALSE);
+		OnSelectTabById(iTabId, FALSE);
 		return 0;
 		break;
 
 	case WM_SETFOCUS:
-		SetFocus(m_hListView[iTabId]);
+		SetFocus(m_hListView.at(iTabId));
 		break;
 
 	case WM_SYSCOMMAND:
@@ -380,7 +360,7 @@ LRESULT CALLBACK Explorerplusplus::TabProxyWndProc(HWND hwnd,UINT Msg,WPARAM wPa
 			break;
 
 		default:
-			SendMessage(m_hListView[iTabId],WM_SYSCOMMAND,wParam,lParam);
+			SendMessage(m_hListView.at(iTabId),WM_SYSCOMMAND,wParam,lParam);
 			break;
 		}
 		break;
@@ -450,15 +430,15 @@ LRESULT CALLBACK Explorerplusplus::TabProxyWndProc(HWND hwnd,UINT Msg,WPARAM wPa
 			/* If the current height of the main window
 			is less than the width, we'll create a thumbnail
 			of maximum width; else maximum height. */
-			if((iBitmapWidth / iMaxWidth) > (iBitmapHeight / iMaxHeight))
+			if(((double) iBitmapWidth / (double) iMaxWidth) > ((double) iBitmapHeight / (double) iMaxHeight))
 			{
 				iWidth = iMaxWidth;
-				iHeight = iMaxWidth * iBitmapHeight / iBitmapWidth;
+				iHeight = (int) ceil(iMaxWidth * ((double)iBitmapHeight / (double)iBitmapWidth));
 			}
 			else
 			{
 				iHeight = iMaxHeight;
-				iWidth = iMaxHeight * iBitmapWidth / iBitmapHeight;
+				iWidth = (int) ceil(iMaxHeight * ((double) iBitmapWidth / (double) iBitmapHeight));
 			}
 
 			/* Thumbnail bitmap. */
@@ -489,9 +469,9 @@ LRESULT CALLBACK Explorerplusplus::TabProxyWndProc(HWND hwnd,UINT Msg,WPARAM wPa
 				{
 					hr = DwmSetIconicThumbnail(hwnd,hbmThumbnail,0);
 				}
-			}
 
-			FreeLibrary(hDwmapi);
+				FreeLibrary(hDwmapi);
+			}
 
 			/* Delete the thumbnail bitmap. */
 			DeleteObject(hbmTab);
@@ -532,9 +512,9 @@ LRESULT CALLBACK Explorerplusplus::TabProxyWndProc(HWND hwnd,UINT Msg,WPARAM wPa
 				{
 					DwmSetIconicLivePreviewBitmap(hwnd,tpi.hbm,&tpi.ptOrigin,0);
 				}
-			}
 
-			FreeLibrary(hDwmapi);
+				FreeLibrary(hDwmapi);
+			}
 
 			if(tpi.hbm != NULL)
 			{
@@ -591,7 +571,7 @@ HBITMAP Explorerplusplus::CaptureTabScreenshot(int iTabId)
 	RECT rcMain;
 	RECT rcTab;
 
-	HWND hTab = m_hListView[iTabId];
+	HWND hTab = m_hListView.at(iTabId);
 
 	GetClientRect(m_hContainer,&rcMain);
 	GetClientRect(hTab,&rcTab);
@@ -693,7 +673,7 @@ void Explorerplusplus::GetTabLivePreviewBitmap(int iTabId,TabPreviewInfo_t *ptpi
 	BOOL bVisible;
 	RECT rcTab;
 
-	HWND hTab = m_hListView[iTabId];
+	HWND hTab = m_hListView.at(iTabId);
 
 	hdcTab = GetDC(hTab);
 	hdcTabSrc = CreateCompatibleDC(hdcTab);
@@ -743,4 +723,81 @@ void Explorerplusplus::GetTabLivePreviewBitmap(int iTabId,TabPreviewInfo_t *ptpi
 	SelectObject(hdcTabSrc,hbmTabPrev);
 	DeleteDC(hdcTabSrc);
 	ReleaseDC(hTab,hdcTab);
+}
+
+void Explorerplusplus::UpdateTaskbarThumbnailsForTabSelectionChange(int selectedTabId)
+{
+	if (!m_bTaskbarInitialised)
+	{
+		return;
+	}
+
+	for (const TabProxyInfo_t &tabProxyInfo : m_TabProxyList)
+	{
+		if (tabProxyInfo.iTabId == selectedTabId)
+		{
+			int nTabs;
+
+			nTabs = TabCtrl_GetItemCount(m_hTabCtrl);
+
+			/* Potentially the tab may have swapped position, so
+			tell the taskbar to reposition it. */
+			if (m_selectedTabIndex == (nTabs - 1))
+			{
+				m_pTaskbarList->SetTabOrder(tabProxyInfo.hProxy, NULL);
+			}
+			else
+			{
+				TCITEM tcNextItem;
+				tcNextItem.mask = TCIF_PARAM;
+				TabCtrl_GetItem(m_hTabCtrl, m_selectedTabIndex + 1, &tcNextItem);
+
+				for (const TabProxyInfo_t &tabProxyInfoNext : m_TabProxyList)
+				{
+					if (tabProxyInfoNext.iTabId == tcNextItem.lParam)
+					{
+						m_pTaskbarList->SetTabOrder(tabProxyInfo.hProxy, tabProxyInfoNext.hProxy);
+					}
+				}
+			}
+
+			m_pTaskbarList->SetTabActive(tabProxyInfo.hProxy, m_hContainer, 0);
+			break;
+		}
+	}
+}
+
+void Explorerplusplus::UpdateTaskbarThumbnailTtitle(int tabId, const std::wstring &title)
+{
+	if (!m_bTaskbarInitialised)
+	{
+		return;
+	}
+
+	for (const TabProxyInfo_t &tabProxyInfo : m_TabProxyList)
+	{
+		if (tabProxyInfo.iTabId == tabId)
+		{
+			SetWindowText(tabProxyInfo.hProxy, title.c_str());
+			m_pTaskbarList->SetThumbnailTooltip(tabProxyInfo.hProxy, title.c_str());
+			break;
+		}
+	}
+}
+
+void Explorerplusplus::SetTabProxyIcon(int iTabId, HICON hIcon)
+{
+	for (const TabProxyInfo_t &tabProxyInfo : m_TabProxyList)
+	{
+		if (tabProxyInfo.iTabId == iTabId)
+		{
+			HICON hIconTemp = (HICON)GetClassLongPtr(tabProxyInfo.hProxy, GCLP_HICONSM);
+			DestroyIcon(hIconTemp);
+
+			hIconTemp = CopyIcon(hIcon);
+
+			SetClassLongPtr(tabProxyInfo.hProxy, GCLP_HICONSM, (LONG_PTR)hIconTemp);
+			break;
+		}
+	}
 }

@@ -175,7 +175,7 @@ UINT msg,WPARAM wParam,LPARAM lParam)
 				RECT rc;
 				SIZE sz;
 
-				UINT uViewMode = m_pShellBrowser[m_iObjectIndex]->GetCurrentViewMode();
+				UINT uViewMode = m_pActiveShellBrowser->GetCurrentViewMode();
 
 				if(uViewMode == VM_LIST)
 				{
@@ -342,7 +342,7 @@ UINT msg,WPARAM wParam,LPARAM lParam)
 
 					m_pActiveShellBrowser->ImportColumns(&ActiveColumnList);
 
-					RefreshTab(m_iObjectIndex);
+					RefreshTab(m_selectedTabId);
 
 					return TRUE;
 				}
@@ -591,17 +591,19 @@ void Explorerplusplus::OnListViewItemChanged(LPARAM lParam)
 	if(m_pShellBrowser[iObjectIndex]->QueryDragging())
 		return;
 
+	HWND listView = m_hListView.at(iObjectIndex);
+
 	if(ItemChanged->uChanged == LVIF_STATE &&
 		((LVIS_STATEIMAGEMASK & ItemChanged->uNewState) >> 12) != 0 &&
 		((LVIS_STATEIMAGEMASK & ItemChanged->uOldState) >> 12) != 0)
 	{
-		if(ListView_GetCheckState(m_hListView[iObjectIndex],ItemChanged->iItem))
+		if(ListView_GetCheckState(listView,ItemChanged->iItem))
 		{
-			NListView::ListView_SelectItem(m_hListView[iObjectIndex],ItemChanged->iItem,TRUE);
+			NListView::ListView_SelectItem(listView,ItemChanged->iItem,TRUE);
 		}
 		else
 		{
-			NListView::ListView_SelectItem(m_hListView[iObjectIndex],ItemChanged->iItem,FALSE);
+			NListView::ListView_SelectItem(listView,ItemChanged->iItem,FALSE);
 		}
 
 		return;
@@ -621,13 +623,13 @@ void Explorerplusplus::OnListViewItemChanged(LPARAM lParam)
 
 	if(Selected)
 	{
-		if(ListView_GetCheckState(m_hListView[iObjectIndex],ItemChanged->iItem) == 0)
-			ListView_SetCheckState(m_hListView[iObjectIndex],ItemChanged->iItem,TRUE);
+		if(ListView_GetCheckState(listView,ItemChanged->iItem) == 0)
+			ListView_SetCheckState(listView,ItemChanged->iItem,TRUE);
 	}
 	else
 	{
-		if(ListView_GetCheckState(m_hListView[iObjectIndex],ItemChanged->iItem) != 0)
-			ListView_SetCheckState(m_hListView[iObjectIndex],ItemChanged->iItem,FALSE);
+		if(ListView_GetCheckState(listView,ItemChanged->iItem) != 0)
+			ListView_SetCheckState(listView,ItemChanged->iItem,FALSE);
 	}
 
 	/* The selection for this tab has changed, so invalidate any
@@ -647,7 +649,7 @@ void Explorerplusplus::OnListViewItemChanged(LPARAM lParam)
 	/* Only update internal selection info
 	if the listview that sent the change
 	notification is active. */
-	if(iObjectIndex == m_iObjectIndex)
+	if(iObjectIndex == m_selectedTabId)
 	{
 		if(Selected)
 		{
@@ -857,35 +859,26 @@ BOOL Explorerplusplus::OnListViewEndLabelEdit(LPARAM lParam)
  */
 void Explorerplusplus::OnListViewGetDisplayInfo(LPARAM lParam)
 {
-	NMLVDISPINFO	*pnmv = NULL;
-	LVITEM			*plvItem = NULL;
-	NMHDR			*nmhdr = NULL;
-	int				iIndex = 0;
-	TCITEM			tcItem;
-	int				nTabsProcessed = 0;
-	int				nTabs;
+	NMLVDISPINFO *pnmv = (NMLVDISPINFO *)lParam;
+	NMHDR * nmhdr = &pnmv->hdr;
 
-	pnmv = (NMLVDISPINFO *)lParam;
-
-	plvItem = &pnmv->item;
-	nmhdr = &pnmv->hdr;
-
-	nTabs = TabCtrl_GetItemCount(m_hTabCtrl);
+	int nTabs = TabCtrl_GetItemCount(m_hTabCtrl);
 
 	/* Find the tab associated with this call. */
-	while((nmhdr->hwndFrom != m_hListView[iIndex])  && nTabsProcessed < nTabs)
+	for (int i = 0; i < nTabs; i++)
 	{
+		TCITEM tcItem;
 		tcItem.mask = TCIF_PARAM;
-		TabCtrl_GetItem(m_hTabCtrl,nTabsProcessed,&tcItem);
+		TabCtrl_GetItem(m_hTabCtrl, i, &tcItem);
 
-		iIndex = (int)tcItem.lParam;
+		int tabIndex = static_cast<int>(tcItem.lParam);
 
-		nTabsProcessed++;
+		if (nmhdr->hwndFrom == m_hListView.at(tabIndex))
+		{
+			m_pShellBrowser[tabIndex]->OnListViewGetDisplayInfo(lParam);
+			break;
+		}
 	}
-
-	m_pShellBrowser[iIndex]->OnListViewGetDisplayInfo(lParam);
-
-	return;
 }
 
 /*
@@ -1066,12 +1059,12 @@ HMENU Explorerplusplus::InitializeRightClickMenu(void)
 	for each(auto ViewMode in m_ViewModes)
 	{
 		TCHAR szTemp[64];
-		LoadString(m_hLanguageModule,GetViewModeMenuStringId(ViewMode.uViewMode),
+		LoadString(m_hLanguageModule,GetViewModeMenuStringId(ViewMode),
 			szTemp,SIZEOF_ARRAY(szTemp));
 
 		mii.cbSize		= sizeof(mii);
 		mii.fMask		= MIIM_ID|MIIM_STRING;
-		mii.wID			= GetViewModeMenuId(ViewMode.uViewMode);
+		mii.wID			= GetViewModeMenuId(ViewMode);
 		mii.dwTypeData	= szTemp;
 		InsertMenuItem(hMenu,IDM_RCLICK_VIEW_PLACEHOLDER,FALSE,&mii);
 	}
@@ -1088,7 +1081,7 @@ HMENU Explorerplusplus::InitializeRightClickMenu(void)
 	mii.hSubMenu	= m_hGroupBySubMenuRClick;
 	SetMenuItemInfo(hMenu,IDM_POPUP_GROUPBY,FALSE,&mii);
 
-	UINT uViewMode = m_pShellBrowser[m_iObjectIndex]->GetCurrentViewMode();
+	UINT uViewMode = m_pActiveShellBrowser->GetCurrentViewMode();
 
 	if(uViewMode == VM_LIST)
 	{
@@ -1312,7 +1305,7 @@ HRESULT Explorerplusplus::OnListViewBeginDrag(LPARAM lParam,DragTypes_t DragType
 			/* Need to remember which tab started the drag (as
 			it may be different from the tab in which the drag
 			finishes). */
-			iDragStartObjectIndex = m_iObjectIndex;
+			iDragStartObjectIndex = m_selectedTabId;
 
 			DWORD dwEffect;
 
@@ -1598,7 +1591,7 @@ HRESULT Explorerplusplus::OnListViewCopy(BOOL bCopy)
 		if(SUCCEEDED(hr))
 		{
 			m_pClipboardDataObject = pClipboardDataObject;
-			m_iCutTabInternal = m_iObjectIndex;
+			m_iCutTabInternal = m_selectedTabId;
 
 			TCHAR szFilename[MAX_PATH];
 

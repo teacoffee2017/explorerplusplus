@@ -4,9 +4,6 @@
  * File: Settings.cpp
  * License: GPL - See LICENSE in the top level directory
  *
- * Explorer++ is an Explorer-like file manager for
- * Windows XP, Vista and 7.
- *
  * This is the main module for Explorer++. Handles startup.
  *
  * Written by David Erceg
@@ -15,10 +12,9 @@
  *****************************************************************/
 
 #include "stdafx.h"
-#include <pantheios\backends\bec.file.h>
-#include <pantheios\inserters\integer.hpp>
 #include "Explorer++.h"
-#include "LoggingFrontend.h"
+#include "Explorer++_internal.h"
+#include "Logging.h"
 #include "ModelessDialogs.h"
 #include "RegistrySettings.h"
 #include "Version.h"
@@ -28,6 +24,7 @@
 #include "../Helper/SetDefaultFileManager.h"
 #include "../Helper/ProcessHelper.h"
 #include "../Helper/Macros.h"
+#include "../Helper/Logging.h"
 
 
 /* Default window size/position. */
@@ -188,7 +185,7 @@ ensure you have administrator privileges."),NExplorerplusplus::APP_NAME,MB_ICONW
 		}
 		else if(lstrcmp(szPath,_T("-enable_logging")) == 0)
 		{
-			NLoggingFrontend::EnableLogging(true);
+			boost::log::core::get()->set_logging_enabled(true);
 		}
 		else
 		{
@@ -230,7 +227,7 @@ void ClearRegistrySettings(void)
 {
 	LSTATUS lStatus;
 
-	lStatus = SHDeleteKey(HKEY_CURRENT_USER,REG_MAIN_KEY);
+	lStatus = SHDeleteKey(HKEY_CURRENT_USER, NExplorerplusplus::REG_MAIN_KEY);
 
 	if(lStatus == ERROR_SUCCESS)
 		MessageBox(NULL,_T("Settings cleared successfully."),NExplorerplusplus::APP_NAME,MB_OK);
@@ -247,8 +244,8 @@ ATOM RegisterMainWindowClass(HINSTANCE hInstance)
 	wcex.cbClsExtra		= 0;
 	wcex.cbWndExtra		= sizeof(Explorerplusplus *);
 	wcex.hInstance		= hInstance;
-	wcex.hIcon			= (HICON)LoadImage(hInstance,MAKEINTRESOURCE(IDI_MAIN),IMAGE_ICON,48,48,LR_VGACOLOR);
-	wcex.hIconSm		= (HICON)LoadImage(hInstance,MAKEINTRESOURCE(IDI_MAIN_SMALL),IMAGE_ICON,16,16,LR_VGACOLOR);
+	wcex.hIcon			= (HICON)LoadImage(hInstance,MAKEINTRESOURCE(IDI_MAIN),IMAGE_ICON,GetSystemMetrics(SM_CXICON),GetSystemMetrics(SM_CYICON),LR_DEFAULTCOLOR);
+	wcex.hIconSm		= (HICON)LoadImage(hInstance,MAKEINTRESOURCE(IDI_MAIN),IMAGE_ICON,GetSystemMetrics(SM_CXSMICON),GetSystemMetrics(SM_CYSMICON),LR_DEFAULTCOLOR);
 	wcex.hCursor		= LoadCursor(NULL,IDC_ARROW);
 	wcex.hbrBackground	= (HBRUSH)NULL;
 	wcex.lpszMenuName	= NULL;
@@ -323,28 +320,29 @@ int WINAPI WinMain(HINSTANCE hInstance,HINSTANCE hPrevInstance,
 	HMODULE			hRichEditLib;
 	HWND			hwnd;
 	HACCEL			hAccl;
-	OSVERSIONINFO	VersionInfo;
 	HANDLE			hMutex = NULL;
 	TCHAR			*pCommandLine	= NULL;
 	MSG				msg;
 	LONG			res;
 	BOOL			bExit = FALSE;
 
-	VersionInfo.dwOSVersionInfoSize	= sizeof(OSVERSIONINFO);
-
-	if(GetVersionEx(&VersionInfo) != 0)
+	if (!IsWindowsVistaOrGreater())
 	{
-		/* Are we running on at least Windows XP?
-		If not, show an error message and exit. */
-		if(VersionInfo.dwMajorVersion < WINDOWS_XP_MAJORVERSION)
-		{
-			MessageBox(NULL,
-				_T("This application needs at least Windows XP or above to run properly."),
-				NExplorerplusplus::APP_NAME,MB_ICONERROR | MB_OK);
+		MessageBox(NULL,
+			_T("This application needs at least Windows Vista or above to run properly."),
+			NExplorerplusplus::APP_NAME, MB_ICONERROR | MB_OK);
 
-			return 0;
-		}
+		return 0;
 	}
+
+	bool enableLogging =
+#ifdef _DEBUG
+		true;
+#else
+		false;
+#endif;
+
+	boost::log::core::get()->set_logging_enabled(enableLogging);
 
 	/* Initialize OLE, as well as the various window classes that
 	will be needed (listview, TreeView, comboboxex, etc.). */
@@ -359,26 +357,7 @@ int WINAPI WinMain(HINSTANCE hInstance,HINSTANCE hPrevInstance,
 
 	bExit = ProcessCommandLine(pCommandLine);
 
-	/* The stock backend file implementation will
-	create the file specified in pantheios_be_file_setFilePath
-	as soon as it is called.
-	Therefore, to avoid creating the log file when
-	it isn't needed, we'll simply avoid calling
-	pantheios_be_file_setFilePath. Note that the
-	backend implementation will then buffer entries
-	until a file is specified. However, the custom
-	frontend will block all entries when logging is
-	disabled, which ensures nothing is actually buffered. */
-	if(NLoggingFrontend::CheckLoggingEnabled())
-	{
-		TCHAR szLogFile[MAX_PATH];
-		GetProcessImageName(GetCurrentProcessId(),szLogFile,SIZEOF_ARRAY(szLogFile));
-
-		PathRemoveFileSpec(szLogFile);
-		PathAppend(szLogFile,NExplorerplusplus::LOG_FILENAME);
-
-		pantheios_be_file_setFilePath(szLogFile);
-	}
+	InitializeLogging(NExplorerplusplus::LOG_FILENAME);
 
 	/* Can't open folders that are children of the
 	control panel. If the command line only refers
@@ -418,28 +397,20 @@ int WINAPI WinMain(HINSTANCE hInstance,HINSTANCE hPrevInstance,
 					}
 					else
 					{
-						VersionInfo.dwOSVersionInfoSize	= sizeof(OSVERSIONINFO);
+						LPITEMIDLIST pidlControlPanelCategory = NULL;
 
-						if(GetVersionEx(&VersionInfo) != 0)
+						hr = GetIdlFromParsingName(CONTROL_PANEL_CATEGORY_VIEW,
+							&pidlControlPanelCategory);
+
+						if (SUCCEEDED(hr))
 						{
-							if(VersionInfo.dwMajorVersion >= WINDOWS_VISTA_SEVEN_MAJORVERSION)
+							if (ILIsParent(pidlControlPanelCategory, pidl, FALSE) &&
+								!CompareIdls(pidlControlPanelCategory, pidl))
 							{
-								LPITEMIDLIST pidlControlPanelCategory = NULL;
-
-								hr = GetIdlFromParsingName(CONTROL_PANEL_CATEGORY_VIEW,
-									&pidlControlPanelCategory);
-
-								if(SUCCEEDED(hr))
-								{
-									if(ILIsParent(pidlControlPanelCategory,pidl,FALSE) &&
-										!CompareIdls(pidlControlPanelCategory,pidl))
-									{
-										bControlPanelChild = TRUE;
-									}
-
-									CoTaskMemFree(pidlControlPanelCategory);
-								}
+								bControlPanelChild = TRUE;
 							}
+
+							CoTaskMemFree(pidlControlPanelCategory);
 						}
 					}
 
@@ -487,7 +458,7 @@ int WINAPI WinMain(HINSTANCE hInstance,HINSTANCE hPrevInstance,
 	BOOL bLoadSettingsFromXML;
 
 	bLoadSettingsFromXML = TestConfigFileInternal();
-	pantheios::log(pantheios::informational,_T("bLoadSettingsFromXML = "),pantheios::integer(bLoadSettingsFromXML));
+	LOG(info) << _T("bLoadSettingsFromXML = ") << bLoadSettingsFromXML;
 
 	if(bLoadSettingsFromXML)
 	{

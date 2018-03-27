@@ -70,9 +70,6 @@
     <ClCompile Include="BaseWindow.cpp">
       <Filter>Miscellaneous</Filter>
     </ClCompile>
-    <ClCompile Include="CustomMenu.cpp">
-      <Filter>Miscellaneous</Filter>
-    </ClCompile>
     <ClCompile Include="DriveInfo.cpp">
       <Filter>Miscellaneous</Filter>
     </ClCompile>
@@ -111,6 +108,12 @@
     </ClCompile>
     <ClCompile Include="FileWrappers.cpp">
       <Filter>Resource Wrappers</Filter>
+    </ClCompile>
+    <ClCompile Include="Logging.cpp">
+      <Filter>Miscellaneous</Filter>
+    </ClCompile>
+    <ClCompile Include="ImageHelper.cpp">
+      <Filter>Miscellaneous</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -154,9 +157,6 @@
       <Filter>Drag and Drop</Filter>
     </ClInclude>
     <ClInclude Include="BaseWindow.h">
-      <Filter>Miscellaneous</Filter>
-    </ClInclude>
-    <ClInclude Include="CustomMenu.h">
       <Filter>Miscellaneous</Filter>
     </ClInclude>
     <ClInclude Include="DriveInfo.h">
@@ -231,6 +231,18 @@
     <ClInclude Include="UniqueHandle.h">
       <Filter>Resource Wrappers</Filter>
     </ClInclude>
+    <ClInclude Include="..\targetver.h">
+      <Filter>Miscellaneous</Filter>
+    </ClInclude>
+    <ClInclude Include="Logging.h">
+      <Filter>Miscellaneous</Filter>
+    </ClInclude>
+    <ClInclude Include="ImageHelper.h">
+      <Filter>Miscellaneous</Filter>
+    </ClInclude>
+    <ClInclude Include="ImageWrappers.h">
+      <Filter>Resource Wrappers</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Dialog Support">
@@ -260,5 +272,8 @@
     <Filter Include="Resource Wrappers">
       <UniqueIdentifier>{343c29c4-2960-44de-8115-240e788f10a5}</UniqueIdentifier>
     </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="packages.config" />
   </ItemGroup>
 </Project>

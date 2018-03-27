@@ -36,17 +36,19 @@ const std::vector<std::wstring> Explorerplusplus::BLACKLISTED_BACKGROUND_MENU_CL
 Explorerplusplus::Explorerplusplus(HWND hwnd) :
 m_hContainer(hwnd)
 {
+	m_hLanguageModule				= nullptr;
+
 	/* When the 'open new tabs next to
 	current' option is activated, the
 	first tab will open at the index
 	m_iTabSelectedItem + 1 - therefore
 	this variable must be initialized. */
-	m_iTabSelectedItem				= 0;
+	m_selectedTabIndex				= 0;
 
 	/* Initial state. */
 	m_nSelected						= 0;
 	m_nSelectedOnInvert				= 0;
-	m_iObjectIndex					= 0;
+	m_selectedTabId					= 0;
 	m_iMaxArrangeMenuItem			= 0;
 	m_bCountingUp					= FALSE;
 	m_bCountingDown					= FALSE;
@@ -76,10 +78,12 @@ m_hContainer(hwnd)
 	m_hLastActiveWindow				= NULL;
 	m_hActiveListView				= NULL;
 	m_hTabFont						= NULL;
+	m_hTabCtrlImageList				= nullptr;
 	m_hNextClipboardViewer			= NULL;
 	m_ListViewMButtonItem			= -1;
 	m_zDeltaTotal					= 0;
 	m_iPreviousTabSelectionId		= -1;
+	m_InitializationFinished		= false;
 
 	m_pTaskbarList					= NULL;
 
@@ -108,64 +112,14 @@ m_hContainer(hwnd)
 	m_iCutTabInternal		= 0;
 	m_hCutTreeViewItem		= NULL;
 
-	/* View modes. */
-	OSVERSIONINFO VersionInfo;
-	ViewMode_t ViewMode;
-
-	VersionInfo.dwOSVersionInfoSize	= sizeof(OSVERSIONINFO);
-
-	if(GetVersionEx(&VersionInfo) != 0)
-	{
-		m_dwMajorVersion = VersionInfo.dwMajorVersion;
-		m_dwMinorVersion = VersionInfo.dwMinorVersion;
-
-		if(VersionInfo.dwMajorVersion >= WINDOWS_VISTA_SEVEN_MAJORVERSION)
-		{
-			ViewMode.uViewMode = VM_EXTRALARGEICONS;
-			m_ViewModes.push_back(ViewMode);
-
-			ViewMode.uViewMode = VM_LARGEICONS;
-			m_ViewModes.push_back(ViewMode);
-
-			ViewMode.uViewMode = VM_ICONS;
-			m_ViewModes.push_back(ViewMode);
-
-			ViewMode.uViewMode = VM_SMALLICONS;
-			m_ViewModes.push_back(ViewMode);
-
-			ViewMode.uViewMode = VM_LIST;
-			m_ViewModes.push_back(ViewMode);
-
-			ViewMode.uViewMode = VM_DETAILS;
-			m_ViewModes.push_back(ViewMode);
-
-			ViewMode.uViewMode = VM_THUMBNAILS;
-			m_ViewModes.push_back(ViewMode);
-
-			ViewMode.uViewMode = VM_TILES;
-			m_ViewModes.push_back(ViewMode);
-		}
-		else
-		{
-			ViewMode.uViewMode = VM_THUMBNAILS;
-			m_ViewModes.push_back(ViewMode);
-
-			ViewMode.uViewMode = VM_TILES;
-			m_ViewModes.push_back(ViewMode);
-
-			ViewMode.uViewMode = VM_ICONS;
-			m_ViewModes.push_back(ViewMode);
-
-			ViewMode.uViewMode = VM_SMALLICONS;
-			m_ViewModes.push_back(ViewMode);
-
-			ViewMode.uViewMode = VM_LIST;
-			m_ViewModes.push_back(ViewMode);
-
-			ViewMode.uViewMode = VM_DETAILS;
-			m_ViewModes.push_back(ViewMode);
-		}
-	}
+	m_ViewModes.push_back(VM_EXTRALARGEICONS);
+	m_ViewModes.push_back(VM_LARGEICONS);
+	m_ViewModes.push_back(VM_ICONS);
+	m_ViewModes.push_back(VM_SMALLICONS);
+	m_ViewModes.push_back(VM_LIST);
+	m_ViewModes.push_back(VM_DETAILS);
+	m_ViewModes.push_back(VM_THUMBNAILS);
+	m_ViewModes.push_back(VM_TILES);
 }
 
 Explorerplusplus::~Explorerplusplus()
@@ -175,8 +129,12 @@ Explorerplusplus::~Explorerplusplus()
 		DeleteObject(m_hTabFont);
 	}
 
+	if (m_hTabCtrlImageList != nullptr)
+	{
+		ImageList_Destroy(m_hTabCtrlImageList);
+	}
+
 	delete m_pTabContainer;
-	delete m_pCustomMenu;
 
 	/* Bookmarks teardown. */
 	delete m_pBookmarksToolbar;
